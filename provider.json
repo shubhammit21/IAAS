@@ -1,0 +1,72 @@
+{
+  "variables": {
+    "aws_access_key": "",
+    "aws_secret_key": ""
+  },
+"provisioners": [
+    {
+        "type": "shell",
+        "execute_command": "echo 'admin' | {{ .Vars }} sudo -E -S sh '{{ .Path }}'",
+        "inline": [
+            "sleep 30",
+            "apt-add-repository ppa:ansible/ansible -y",
+            "/usr/bin/apt-get update",
+            "/usr/bin/apt-get -y install ansible",
+            "mkdir /home/debian/app",
+            "chown admin:admin /home/debian/app"
+        ]
+    },
+"_comment": "Install docker",
+    {
+      "type": "shell",
+      "script": "install.sh",
+      "pause_before": "5s"
+    },
+"_comment": "Build latest dockerimage for application",
+    {
+      "type": "shell",
+      "script": "packer/app.sh",
+      "pause_before": "5s"
+    },
+    {
+      "type": "file",
+      "source": ".",
+      "destination": "/home/debian/app/"
+    },
+"_comment": "Run playbook for deployment steps"
+    {
+      "type": "ansible-local",
+      "playbook_file": "packer/ansible-playbook.yml"
+    }
+  ],
+"builders": [{
+    "type": "amazon-ebs",
+    "access_key": "{{user `aws_access_key`}}",
+    "secret_key": "{{user `aws_secret_key`}}",
+    "region": "eu-west-2",
+    "source_ami_filter": {
+      "filters": {
+        "virtualization-type": "hvm",
+        "name": "debian/images/*debian-strecth-9.5-*",
+        "root-device-type": "ebs"
+      },
+      "owners": ["099720109477"],
+      "most_recent": true
+    }, 
+ "tags": {
+        "OS_Version": "Debian",
+        "Release": "Latest",
+        "Runner": "EC2",
+  "Name": "Packer Baked AMI"
+      },
+    "instance_type": "t2.small",
+    "ssh_username": "admin",
+    "ami_name": "prod-image {{timestamp}}",
+    "launch_block_device_mappings": [{
+      "device_name": "/dev/sda1",
+      "volume_size": 8,
+      "volume_type": "gp2",
+      "delete_on_termination": true
+    }]
+  }]
+}
